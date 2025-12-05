@@ -1,4 +1,4 @@
-name: Build and Commit Hugo Output2
+name: Build and Commit Hugo Output3
 
 on:
   push:
