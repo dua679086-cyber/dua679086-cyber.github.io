@@ -1,0 +1,65 @@
+name: Build and Commit Hugo Output
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: "latest"
+          extended: true
+
+      - name: Install Ananke theme
+        run: |
+          git submodule add https://github.com/theNewDynamic/gohugo-theme-ananke.git themes/ananke || true
+          git submodule update --init --recursive
+
+      - name: Get content and create Markdown
+        run: |
+          mkdir -p content/posts
+          curl -s https://xquery.libdyna.com/posts -o article.json
+          TITLE=$(jq -r '.result.title' article.json)
+          CONTENT=$(jq -r '.result.content' article.json)
+          TIMESTAMP=$(date +%s)
+          cat > content/posts/auto-post-${TIMESTAMP}.md <<EOF
+          +++
+          title = "$TITLE"
+          date = "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          draft = false
+          +++
+
+          $CONTENT
+          EOF
+
+      - name: Build Hugo
+        run: hugo --cleanDestinationDir --minify
+
+      - name: Commit build output to public folder
+        run: |
+          git config --local user.email "github-actions@github.com"
+          git config --local user.name "GitHub Actions"
+          
+          git add -A public/
+          git add content/posts/
+          
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          
+          git commit -m "Update Hugo build output [$(date -u +"%Y-%m-%d %H:%M:%S UTC")]"
+          git push
